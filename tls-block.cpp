@@ -477,11 +477,10 @@ int main(int argc, char* argv[]) {
 
 		// TLS handshake data인지 확인
 		if (data_len > 5 && data[0] == 0x16) {  // TLS Handshake record type
-							// tls_header 가지고 있음.
+			// tls_header 가지고 있음.
 			has_tls_header = true;
 		}
 
-		// Process with strict completion checking
 		// 패킷 구체적으로 분석 시작
 		printf("\n------------------------------------------------------\n");
 		sni = handle_handshake_reassembly(key, data, data_len, has_tls_header);
