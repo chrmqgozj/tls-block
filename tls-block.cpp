@@ -41,13 +41,12 @@ struct SegmentInfo {
 	bool has_tls_header;
 	bool has_handshake_header;
 	uint32_t fragment_count;
-	bool is_complete;                    // Flag for complete reassembly
 	bool sni_extracted;                  // Flag to prevent reprocessing
 
 	// 초기화 영역
 	SegmentInfo() : expected_total_length(0), expected_handshake_length(0), 
 	has_tls_header(false), has_handshake_header(false), 
-	fragment_count(0), is_complete(false), sni_extracted(false) {}
+	fragment_count(0), sni_extracted(false) {}
 };
 
 std::map<Key, SegmentInfo> segments;
@@ -62,7 +61,7 @@ uint32_t get_handshake_length(const uint8_t* length_bytes) {
 	return (length_bytes[0] << 16) | (length_bytes[1] << 8) | length_bytes[2];
 }
 
-// Helper function to print connection info
+// 정신없어서 밖으로 뺌
 void print_connection_info(const Key& key) {
 	char src_ip[INET_ADDRSTRLEN], dst_ip[INET_ADDRSTRLEN];
 	inet_ntop(AF_INET, &key.sip, src_ip, INET_ADDRSTRLEN);
@@ -107,6 +106,7 @@ std::string extract_sni_from_client_hello(const uint8_t* client_hello_data, uint
 		if (offset + ext_len > data_len) break;
 
 		// SNI extension type is 0x0000
+		// SNI extension 구조: (name list length)2byte + (type)1byte + (name length)2byte = 5byte
 		if (ext_type == 0x0000 && ext_len >= 5) {
 			if (offset + 5 <= data_len) {
 				uint16_t name_list_len = ntohs(*(uint16_t*)(client_hello_data + offset));
@@ -180,8 +180,12 @@ std::string handle_handshake_reassembly(const Key& key, const uint8_t* incoming_
 
 	segment.fragment_count++;
 
+	// 패킷 구분하게 출력
 	printf("Fragment #%u received:\n", segment.fragment_count);
-	print_connection_info(key);
+	char src_ip[INET_ADDRSTRLEN], dst_ip[INET_ADDRSTRLEN];
+	inet_ntop(AF_INET, &key.sip, src_ip, INET_ADDRSTRLEN);
+	inet_ntop(AF_INET, &key.dip, dst_ip, INET_ADDRSTRLEN);
+	printf("%s:%d -> %s:%d\n", src_ip, ntohs(key.sport), dst_ip, ntohs(key.dport));
 	printf("Fragment size: %u bytes\n", data_len);
 	printf("Has TLS record header: %s\n", has_tls_header ? "Yes" : "No");
 
@@ -228,7 +232,6 @@ std::string handle_handshake_reassembly(const Key& key, const uint8_t* incoming_
 
 	// 패킷 다 받았는지 확인하기.
 	if (is_reassembly_complete(segment)) {
-		segment.is_complete = true;
 		printf("reassembly completed\n");
 
 		// 패킷 다 받았으니까 이제 sni 뽑아오기.
@@ -266,6 +269,7 @@ std::string handle_handshake_reassembly(const Key& key, const uint8_t* incoming_
 	return "";
 }
 
+// tcp-block 참조
 unsigned short checksum(unsigned short *buffer, int size){
 	unsigned long cksum=0;
 	while(size > 1) {
