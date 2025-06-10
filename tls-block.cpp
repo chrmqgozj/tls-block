@@ -61,14 +61,6 @@ uint32_t get_handshake_length(const uint8_t* length_bytes) {
 	return (length_bytes[0] << 16) | (length_bytes[1] << 8) | length_bytes[2];
 }
 
-// 정신없어서 밖으로 뺌
-void print_connection_info(const Key& key) {
-	char src_ip[INET_ADDRSTRLEN], dst_ip[INET_ADDRSTRLEN];
-	inet_ntop(AF_INET, &key.sip, src_ip, INET_ADDRSTRLEN);
-	inet_ntop(AF_INET, &key.dip, dst_ip, INET_ADDRSTRLEN);
-	printf("%s:%d -> %s:%d\n", src_ip, ntohs(key.sport), dst_ip, ntohs(key.dport));
-}
-
 // Parse SNI from Client Hello data
 std::string extract_sni_from_client_hello(const uint8_t* client_hello_data, uint32_t data_len) {
 	if (data_len < 38) return "";
