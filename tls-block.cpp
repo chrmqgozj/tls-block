@@ -46,15 +46,11 @@ struct SegmentInfo {
 
 	// 초기화 영역
 	SegmentInfo() : expected_total_length(0), expected_handshake_length(0), 
-					has_tls_header(false), has_handshake_header(false), 
-					fragment_count(0), is_complete(false), sni_extracted(false) {}
+	has_tls_header(false), has_handshake_header(false), 
+	fragment_count(0), is_complete(false), sni_extracted(false) {}
 };
 
 std::map<Key, SegmentInfo> segments;
-
-// Statistics
-uint32_t fragmented_handshakes = 0;
-uint32_t incomplete_handshakes = 0;
 
 void usage() {
 	printf("syntax : tls-block <interface> <server_name>\n");
@@ -162,12 +158,12 @@ bool is_reassembly_complete(const SegmentInfo& segment) {
 	if (!segment.has_tls_header || !segment.has_handshake_header) {
 		return false;
 	}
-	
+
 	// 해당 패킷 데이터가 0이라면 검사할 필요 없음.
 	if (segment.expected_total_length == 0) {
 		return false;
 	}
-	
+
 	// 필요한 길이랑 지금까지 받은 길이랑 같으면 다 합쳐진거.
 	return segment.data.length() == segment.expected_total_length;
 }
@@ -176,7 +172,7 @@ bool is_reassembly_complete(const SegmentInfo& segment) {
 std::string handle_handshake_reassembly(const Key& key, const uint8_t* incoming_data, uint32_t data_len, bool has_tls_header) {
 	// key에 대해 segment 생성
 	SegmentInfo& segment = segments[key];
-	
+
 	// 이미 sni가 추출된 패킷이라면 검사 필요 없음.
 	if (segment.sni_extracted) {
 		return "";
@@ -197,7 +193,7 @@ std::string handle_handshake_reassembly(const Key& key, const uint8_t* incoming_
 			uint16_t tls_len = ntohs(*(uint16_t*)(incoming_data + 3));
 			segment.expected_total_length = 5 + tls_len;  // TLS header + payload
 			segment.has_tls_header = true;
-			
+
 			// 조각났는지 확인하기
 			// 기록된 길이보다 실제 측정 길이가 작다면 패킷이 아직 덜 온 것
 			if (data_len < segment.expected_total_length) {
@@ -213,17 +209,17 @@ std::string handle_handshake_reassembly(const Key& key, const uint8_t* incoming_
 
 	// 데이터 자체는 충분한데 아직 handshake protocol 헤더 정리 안 했으면 해주기
 	if (segment.has_tls_header && !segment.has_handshake_header && segment.data.length() >= 9) {  // 5 (TLS) + 4 (handshake header)
-		// c_str: c++ string -> c const char* / const char* -> const uint8_t* (같은 1byte 자료형) / +5는 TLS header는 필요 없으니까 떼고 검사하려고
+												      // c_str: c++ string -> c const char* / const char* -> const uint8_t* (같은 1byte 자료형) / +5는 TLS header는 필요 없으니까 떼고 검사하려고
 		const uint8_t* handshake_start = (const uint8_t*)segment.data.c_str() + 5;
 		// 분석하기 편하게 자료형 변환
 		const tls_handshake_header* hs_hdr = (const tls_handshake_header*)handshake_start;
-		
+
 		// 우리는 CLIENT_HELLO 패킷이 궁금함. 
 		if (hs_hdr->msg_type == TLS_CLIENT_HELLO) {
 			// length가 3byte라서 ntohs나 ntohl 못 씀. 따로 함수 생성해줌.
 			segment.expected_handshake_length = get_handshake_length(hs_hdr->length);
 			segment.has_handshake_header = true;
-			
+
 			// 전체 data 길이도 업데이트 해주기 (5: tls header, 4: handshake protocol header)
 			if (segment.expected_total_length != (5 + 4 + segment.expected_handshake_length)) {
 				segment.expected_total_length = 5 + 4 + segment.expected_handshake_length;
@@ -235,12 +231,12 @@ std::string handle_handshake_reassembly(const Key& key, const uint8_t* incoming_
 	if (is_reassembly_complete(segment)) {
 		segment.is_complete = true;
 		printf("reassembly completed\n");
-		
+
 		// 패킷 다 받았으니까 이제 sni 뽑아오기.
 		// TLS header 건너뛰기 (필요없음)
 		const uint8_t* handshake_start = (const uint8_t*)segment.data.c_str() + 5;  
 		uint32_t handshake_data_len = segment.data.length() - 5;
-		
+
 		// sni 추출
 		std::string sni = parse_complete_tls_handshake(handshake_start, handshake_data_len);
 
@@ -249,11 +245,11 @@ std::string handle_handshake_reassembly(const Key& key, const uint8_t* incoming_
 			printf("sni extracted: %s\n", sni.c_str());
 			// 추출됐다고 표시해주기 (그래야 다음번에 이 패킷을 가지고 더 뭐 안 함)
 			segment.sni_extracted = true;
-			
+
 			// Clean up the segment - remove from map to prevent reprocessing
 			// key가 같은데 새로 들어오는 패킷이 있을 수 있음 (왜냐하면 우리가 ip랑 port 가지고만 검사하니까) 그래서 이미 검사 끝난거는 지워주기
 			segments.erase(key);
-			
+
 			return sni;
 		}
 		else {
@@ -266,7 +262,6 @@ std::string handle_handshake_reassembly(const Key& key, const uint8_t* incoming_
 		if (segment.expected_total_length > 0) {
 			printf("need: %u bytes\n", segment.expected_total_length - new_size);
 		}
-		incomplete_handshakes++;
 	}
 
 	return "";
@@ -442,7 +437,7 @@ int main(int argc, char* argv[]) {
 	printf("TLS Handshake Analysis with Fragmentation Control\n");
 	printf("Target server pattern: %s\n", pattern);
 	printf("Listening on interface: %s\n\n", dev);
-	
+
 	struct pcap_pkthdr* header;
 	const u_char* packet;
 
@@ -487,7 +482,7 @@ int main(int argc, char* argv[]) {
 
 		// TLS handshake data인지 확인
 		if (data_len > 5 && data[0] == 0x16) {  // TLS Handshake record type
-			// tls_header 가지고 있음.
+							// tls_header 가지고 있음.
 			has_tls_header = true;
 		}
 
