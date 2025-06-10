@@ -180,7 +180,6 @@ std::string handle_handshake_reassembly(const Key& key, const uint8_t* incoming_
 
 	segment.fragment_count++;
 
-	// erase
 	printf("Fragment #%u received:\n", segment.fragment_count);
 	print_connection_info(key);
 	printf("Fragment size: %u bytes\n", data_len);
