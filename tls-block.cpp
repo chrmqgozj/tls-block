@@ -248,7 +248,8 @@ std::string handle_handshake_reassembly(const Key& key, const uint8_t* incoming_
 		}
 		else {
 			// sni 추출 안 돼도 이미 패킷을 다 받은 상태이기 때문에 더 이상 할 수 있는 일이 없음. 그냥 완료 처리.
-			segment.sni_extracted = true;  // Mark as processed to avoid reprocessing
+			segment.sni_extracted = true;
+			segments.erase(key);
 		}
 	}
 	else {
